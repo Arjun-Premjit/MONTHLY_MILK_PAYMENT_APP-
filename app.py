@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import calendar
 import os
+from datetime import datetime
 
 
 def load_data(selected_month):
@@ -31,8 +32,17 @@ def app():
     if 'editor_key' not in st.session_state:
         st.session_state.editor_key = 0
 
+    #CALENDAR MONTH SELECTION
+    current_month_num = datetime.now().month
+
+    default_month_index = current_month_num - 1
+
+
     month_names = [calendar.month_name[i] for i in range(1, 13)]
-    selected_month = st.selectbox("Select a month:", month_names)
+    selected_month = st.selectbox("Select a month:", options=month_names,
+        index=default_month_index
+    )
+    
     st.write('\n'*20)
 
     # Load data for selected month
@@ -72,10 +82,11 @@ def app():
     # Calculate totals using the edited DataFrame
     total_quantity1 = edited_df["காலை"].sum()
     total_quantity2 = edited_df["மாலை"].sum()
-    price = (total_quantity1 + total_quantity2) * 0.045
-    
+
     integer_value = st.number_input("# Cost of 1 Litre Milk: ", value=45, step=1)
 
+    price ="{:.2f}".format(((total_quantity1 + total_quantity2) * 0.001 )* integer_value)
+    
     st.write("# Total amount of milk bought in the month of ",selected_month,"is",(total_quantity1+total_quantity2)*0.001,"litres.")
     
     st.write("## Calculation: ", ((total_quantity1+ total_quantity2)*0.001)," X",integer_value," = ₹ ", price)
@@ -84,4 +95,3 @@ def app():
 
 if __name__ == "__main__":
     app()
-
