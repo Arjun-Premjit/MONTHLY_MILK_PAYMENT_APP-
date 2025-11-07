@@ -78,9 +78,10 @@ def app():
 
     st.write("# Total amount of milk bought in the month of ",selected_month,"is",(total_quantity1+total_quantity2)*0.001,"litres.")
     
-    st.write("## Calculation: ", (total_quantity1+ total_quantity2*0.001)," X",integer_value," = ₹ ", price)
+    st.write("## Calculation: ", ((total_quantity1+ total_quantity2)*0.001)," X",integer_value," = ₹ ", price)
 
     st.write("# You have to pay: ₹", price)
 
 if __name__ == "__main__":
     app()
+
