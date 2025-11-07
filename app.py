@@ -3,6 +3,7 @@ import pandas as pd
 import calendar
 import os
 
+
 def load_data(selected_month):
     file_path = f"data_{selected_month}.csv"
     
@@ -73,8 +74,12 @@ def app():
     total_quantity2 = edited_df["மாலை"].sum()
     price = (total_quantity1 + total_quantity2) * 0.045
     
-    st.write("# Total amount of milk bought in the month",selected_month,"is",(total_quantity1+total_quantity2)*0.001,"litres.")
+    integer_value = st.number_input("# Cost of 1 Litre Milk: ", value=45, step=1)
+
+    st.write("# Total amount of milk bought in the month of ",selected_month,"is",(total_quantity1+total_quantity2)*0.001,"litres.")
     
+    st.write("## Calculation: ", (total_quantity1+ total_quantity2*0.001)," X",integer_value," = ₹ ", price)
+
     st.write("# You have to pay: ₹", price)
 
 if __name__ == "__main__":
