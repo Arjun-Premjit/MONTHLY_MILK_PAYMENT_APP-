@@ -4,6 +4,7 @@ import pandas as pd
 import calendar
 from datetime import datetime
 
+
 try:
     import mysql.connector
     from mysql.connector import Error
@@ -12,22 +13,13 @@ except ModuleNotFoundError:
     Error = Exception
 
 def get_connection():
-    """Connect to MySQL using environment variables."""
-    if mysql is None:
-        return None
-    try:
-        conn = mysql.connector.connect(
-            host=os.getenv("MYSQL_HOST", "localhost"),
-            port=int(os.getenv("MYSQL_PORT", 3306)),
-            user=os.getenv("MYSQL_USER", "root"),
-            password=os.getenv("MYSQL_PASSWORD", "MySQLRoot123@(*)"),
-            database=os.getenv("MYSQL_DATABASE", "milk_calculator_app"),
-            autocommit=False
+    return mysql.connector.connect(
+        host=st.secrets["mysql"]["host"],
+        user=st.secrets["mysql"]["user"],
+        password=st.secrets["mysql"]["password"],
+        database=st.secrets["mysql"]["database"],
+        port=st.secrets["mysql"]["port"] 
         )
-        return conn
-    except Error as e:
-        st.error(f"MySQL connection error: {e}")
-        return None
 
 def get_days_in_month(month_num, year):
     """Return number of days in month."""
