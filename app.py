@@ -3,8 +3,6 @@ import streamlit as st
 import pandas as pd
 import calendar
 from datetime import datetime
-import mysql.connector
-from mysql.connector import Error
 
 try:
     import mysql.connector
@@ -148,3 +146,4 @@ def app():
 
 if __name__ == "__main__":
     app()
+
