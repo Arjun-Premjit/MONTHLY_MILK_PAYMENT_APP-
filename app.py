@@ -3,22 +3,11 @@ import streamlit as st
 import pandas as pd
 import calendar
 from datetime import datetime
-
-try:
-    import mysql.connector
-    from mysql.connector import Error
-except ModuleNotFoundError:
-    mysql = None
-    Error = Exception
+import sqlite3  # Replaced mysql.connector with sqlite3
 
 def get_connection():
-    conn = mysql.connector.connect(
-        host=st.secrets["mysql"]["host"],
-        user=st.secrets["mysql"]["user"],
-        password=st.secrets["mysql"]["password"],
-        database=st.secrets["mysql"]["database"],
-        port=st.secrets["mysql"]["port"]
-    )
+    # Connect to SQLite database file (creates it if it doesn't exist)
+    conn = sqlite3.connect('milk_calculator_app.db')
     return conn
 
 def get_days_in_month(month_num, year):
@@ -30,8 +19,18 @@ def load_data_db(conn, month_num, year):
     days = get_days_in_month(month_num, year)
     dates_list = [f"{day:02d}/{month_num:02d}/{year}" for day in range(1, days + 1)]
     
+    # Create table if it doesn't exist
     cur = conn.cursor()
-    placeholders = ",".join(["%s"] * len(dates_list))
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS milk_data (
+        DATE TEXT PRIMARY KEY,
+        MORNING REAL,
+        EVENING REAL
+    )
+    """)
+    conn.commit()
+    
+    placeholders = ",".join(["?"] * len(dates_list))  # SQLite uses ? for placeholders
     cur.execute(f"SELECT DATE, MORNING, EVENING FROM milk_data WHERE DATE IN ({placeholders})", dates_list)
     rows = cur.fetchall()
     cur.close()
@@ -54,14 +53,21 @@ def save_data_db(conn, df):
         rows.append((r["தேதி"], float(r["காலை"]), float(r["மாலை"])))
     
     cur = conn.cursor()
+    # Create table if it doesn't exist
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS milk_data (
+        DATE TEXT PRIMARY KEY,
+        MORNING REAL,
+        EVENING REAL
+    )
+    """)
+    
+    # SQLite uses INSERT OR REPLACE for upsert
     sql = """
-    INSERT INTO milk_data (DATE, MORNING, EVENING)
-    VALUES (%s, %s, %s)
-    ON DUPLICATE KEY UPDATE
-        MORNING = VALUES(MORNING),
-        EVENING = VALUES(EVENING);
+    INSERT OR REPLACE INTO milk_data (DATE, MORNING, EVENING)
+    VALUES (?, ?, ?)
     """
-
+    
     cur.executemany(sql, rows)
     conn.commit()
     cur.close()
@@ -70,7 +76,6 @@ def app():
     st.title("MILK PAYMENT MONEY CALCULATOR 🐄🥛")
     
     conn = get_connection()
-
 
     # Get current month and year
     now = datetime.now()
@@ -122,7 +127,8 @@ def app():
         try:
             save_data_db(conn, edited_df)
             st.session_state.editor_key += 1
-        except Error as e:
+            st.success("Data saved successfully!")
+        except Exception as e:
             st.error(f"Error saving to DB: {e}")
         finally:
             conn.close()
@@ -134,17 +140,12 @@ def app():
     
     price_per_litre = st.number_input("# Cost of 1 litre Milk(₹):", value=45, step=1)
     total_price = total_litres * price_per_litre
-
+    ft='{:.2f}'.format(total_litres)
     st.write("---")
 
-    #st.write(f"# **Total Morning:** {total_morning:.3f} Litres")
-    #st.write(f"# **Total Evening:** {total_evening:.3f} Litres")
-    
-    st.write(f"# Total Amount of milk bought in the month of",selected_month_name,"  ",selected_year," : ",total_litres,"L")
-    st.write("## Calculation:",total_litres,"X",price_per_litre  ," = ₹ ",'{:.2f}'.format(total_price)) 
-    st.write(f"# **Total to Pay:** ₹ {total_price:.2f}")
+    st.write("# Total Amount of milk bought in the month of ",selected_month_name," ",selected_year," :",ft," L")
+    st.write("## Calculation: ",ft," X ",price_per_litre," = ₹ ",ft) 
+    st.write(f"# Total to Pay:   ₹ {total_price:.2f}")
 
 if __name__ == "__main__":
     app()
-
-
