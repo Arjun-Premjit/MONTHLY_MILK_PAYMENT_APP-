@@ -12,13 +12,13 @@ except ModuleNotFoundError:
     Error = Exception
 
 def get_connection():
-    conn=mysql.connector.connect(
+    conn = mysql.connector.connect(
         host=st.secrets["mysql"]["host"],
         user=st.secrets["mysql"]["user"],
         password=st.secrets["mysql"]["password"],
         database=st.secrets["mysql"]["database"],
-        port=st.secrets["mysql"]["port"] 
-        )
+        port=st.secrets["mysql"]["port"]
+    )
     return conn
 
 def get_days_in_month(month_num, year):
@@ -146,4 +146,5 @@ def app():
 
 if __name__ == "__main__":
     app()
+
 
