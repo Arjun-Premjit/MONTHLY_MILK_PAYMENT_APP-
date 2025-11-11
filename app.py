@@ -3,7 +3,8 @@ import streamlit as st
 import pandas as pd
 import calendar
 from datetime import datetime
-
+import mysql.connector
+from mysql.connector import Error
 
 try:
     import mysql.connector
@@ -13,13 +14,14 @@ except ModuleNotFoundError:
     Error = Exception
 
 def get_connection():
-    return mysql.connector.connect(
+    conn=mysql.connector.connect(
         host=st.secrets["mysql"]["host"],
         user=st.secrets["mysql"]["user"],
         password=st.secrets["mysql"]["password"],
         database=st.secrets["mysql"]["database"],
         port=st.secrets["mysql"]["port"] 
         )
+    return conn
 
 def get_days_in_month(month_num, year):
     """Return number of days in month."""
@@ -68,11 +70,9 @@ def save_data_db(conn, df):
 
 def app():
     st.title("MILK PAYMENT MONEY CALCULATOR 🐄🥛")
-
+    
     conn = get_connection()
-    if conn is None:
-        st.error("Cannot connect to MySQL. Ensure MySQL server is running and env vars are set.")
-        return
+
 
     # Get current month and year
     now = datetime.now()
