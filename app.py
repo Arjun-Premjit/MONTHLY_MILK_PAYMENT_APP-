@@ -1,97 +1,158 @@
+import os
 import streamlit as st
 import pandas as pd
 import calendar
-import os
 from datetime import datetime
 
+try:
+    import mysql.connector
+    from mysql.connector import Error
+except ModuleNotFoundError:
+    mysql = None
+    Error = Exception
 
-def load_data(selected_month):
-    file_path = f"data_{selected_month}.csv"
-    
-    if os.path.exists(file_path):
-        return pd.read_csv(file_path)
-    
-    # Create default DataFrame for new month
-    df = pd.DataFrame({
-        "தேதி": range(1, 32),
-        "காலை": [0.0] * 31,
-        "மாலை": [0.0] * 31
-    })
-    df.to_csv(file_path, index=False)
-    return df
+def get_connection():
+    """Connect to MySQL using environment variables."""
+    if mysql is None:
+        return None
+    try:
+        conn = mysql.connector.connect(
+            host=os.getenv("MYSQL_HOST", "localhost"),
+            port=int(os.getenv("MYSQL_PORT", 3306)),
+            user=os.getenv("MYSQL_USER", "root"),
+            password=os.getenv("MYSQL_PASSWORD", "MySQLRoot123@(*)"),
+            database=os.getenv("MYSQL_DATABASE", "milk_calculator_app"),
+            autocommit=False
+        )
+        return conn
+    except Error as e:
+        st.error(f"MySQL connection error: {e}")
+        return None
 
-def save_data(df, selected_month):
-    """Save DataFrame to CSV file"""
-    file_path = f"data_{selected_month}.csv"
-    df.to_csv(file_path, index=False)
+def get_days_in_month(month_num, year):
+    """Return number of days in month."""
+    return calendar.monthrange(year, month_num)[1]
+
+def load_data_db(conn, month_num, year):
+    """Load data for given month/year from milk_data table."""
+    days = get_days_in_month(month_num, year)
+    dates_list = [f"{day:02d}/{month_num:02d}/{year}" for day in range(1, days + 1)]
+    
+    cur = conn.cursor()
+    placeholders = ",".join(["%s"] * len(dates_list))
+    cur.execute(f"SELECT DATE, MORNING, EVENING FROM milk_data WHERE DATE IN ({placeholders})", dates_list)
+    rows = cur.fetchall()
+    cur.close()
+    
+    # Build dict from DB rows
+    data_dict = {row[0]: (row[1], row[2]) for row in rows}
+    
+    # Create DataFrame with all dates for the month
+    df_data = {
+        "தேதி": dates_list,
+        "காலை": [data_dict.get(date, (0.0, 0.0))[0] for date in dates_list],
+        "மாலை": [data_dict.get(date, (0.0, 0.0))[1] for date in dates_list]
+    }
+    return pd.DataFrame(df_data)
+
+def save_data_db(conn, df):
+    """Save all rows from DataFrame to milk_data table."""
+    rows = []
+    for _, r in df.iterrows():
+        rows.append((r["தேதி"], float(r["காலை"]), float(r["மாலை"])))
+    
+    cur = conn.cursor()
+    sql = """
+    INSERT INTO milk_data (DATE, MORNING, EVENING)
+    VALUES (%s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+        MORNING = VALUES(MORNING),
+        EVENING = VALUES(EVENING);
+    """
+
+    cur.executemany(sql, rows)
+    conn.commit()
+    cur.close()
 
 def app():
     st.title("MILK PAYMENT MONEY CALCULATOR 🐄🥛")
 
-    # Initialize session state for the editor's key
+    conn = get_connection()
+    if conn is None:
+        st.error("Cannot connect to MySQL. Ensure MySQL server is running and env vars are set.")
+        return
+
+    # Get current month and year
+    now = datetime.now()
+    current_month_num = now.month
+    current_year = now.year
+
+    # Month dropdown (all 12 months with current month as default)
+    month_names = [calendar.month_name[i] for i in range(1, 13)]
+    selected_month_name = st.selectbox(
+        "Select Month:",
+        options=month_names,
+        index=current_month_num - 1  # Default to current month
+    )
+    selected_month_num = month_names.index(selected_month_name) + 1
+
+    # Year input
+    selected_year = st.number_input(
+        "Select Year:",
+        min_value=2000,
+        max_value=2100,
+        value=current_year,
+        step=1
+    )
+
+    st.write(f"**Showing data for: {selected_month_name} {selected_year}**")
+    st.write('\n')
+
+    # Load data for selected month/year
+    df = load_data_db(conn, selected_month_num, selected_year)
+
+    # Data editor
     if 'editor_key' not in st.session_state:
         st.session_state.editor_key = 0
 
-    #CALENDAR MONTH SELECTION
-    current_month_num = datetime.now().month
-
-    default_month_index = current_month_num - 1
-
-
-    month_names = [calendar.month_name[i] for i in range(1, 13)]
-    selected_month = st.selectbox("Select a month:", options=month_names,
-        index=default_month_index
-    )
-    
-    st.write('\n'*20)
-
-    # Load data for selected month
-    df = load_data(selected_month)
-
-    # Configure columns for editing
     edited_df = st.data_editor(
         df,
         column_config={
-            "தேதி": st.column_config.NumberColumn(
-                "தேதி",
-                help="This column contains fixed values from 1 to 32 and cannot be edited.",
-                disabled=True
-            ),
-            "காலை": st.column_config.NumberColumn(
-                "காலை",
-                help="You can edit the values in this column.",
-                format="%.1f"
-            ),
-            "மாலை": st.column_config.NumberColumn(
-                "மாலை",
-                help="You can edit the values in this column.",
-                format="%.1f"
-            )
+            "தேதி": st.column_config.TextColumn("தேதி (dd/mm/yyyy)", disabled=True),
+            "காலை": st.column_config.NumberColumn("காலை", format="%.3f"),
+            "மாலை": st.column_config.NumberColumn("மாலை", format="%.3f"),
         },
         hide_index=True,
-        num_rows="dynamic",
+        num_rows="fixed",
         key=f"editor_{st.session_state.editor_key}"
     )
 
-    # Save changes immediately when data is edited
+    # Save on change
     if edited_df is not None and not edited_df.equals(df):
-        save_data(edited_df, selected_month)
-        st.session_state.editor_key += 1  # Force re-render of editor
-        st.rerun()  # Rerun the app to show updated data
+        try:
+            save_data_db(conn, edited_df)
+            st.session_state.editor_key += 1
+        except Error as e:
+            st.error(f"Error saving to DB: {e}")
+        finally:
+            conn.close()
 
-    # Calculate totals using the edited DataFrame
-    total_quantity1 = edited_df["காலை"].sum()
-    total_quantity2 = edited_df["மாலை"].sum()
-
-    integer_value = st.number_input("# Cost of 1 Litre Milk: ", value=45, step=1)
-
-    price ="{:.2f}".format(((total_quantity1 + total_quantity2) * 0.001 )* integer_value)
+    # Calculate totals
+    total_morning = edited_df["காலை"].sum()
+    total_evening = edited_df["மாலை"].sum()
+    total_litres = (total_morning + total_evening) * 0.001
     
-    st.write("# Total amount of milk bought in the month of ",selected_month,"is",(total_quantity1+total_quantity2)*0.001,"litres.")
-    
-    st.write("## Calculation: ", ((total_quantity1+ total_quantity2)*0.001)," X",integer_value," = ₹ ", price)
+    price_per_litre = st.number_input("# Cost of 1 litre Milk(₹):", value=45, step=1)
+    total_price = total_litres * price_per_litre
 
-    st.write("# You have to pay: ₹", price)
+    st.write("---")
+
+    #st.write(f"# **Total Morning:** {total_morning:.3f} Litres")
+    #st.write(f"# **Total Evening:** {total_evening:.3f} Litres")
+    
+    st.write(f"# Total Amount of milk bought in the month of",selected_month_name,"  ",selected_year," : ",total_litres,"L")
+    st.write("## Calculation:",total_litres,"X",price_per_litre  ," = ₹ ",'{:.2f}'.format(total_price)) 
+    st.write(f"# **Total to Pay:** ₹ {total_price:.2f}")
 
 if __name__ == "__main__":
     app()
