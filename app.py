@@ -3,40 +3,30 @@ import streamlit as st
 import pandas as pd
 import calendar
 from datetime import datetime
-import sqlite3  # Replaced mysql.connector with sqlite3
+from pymongo import MongoClient  # Added for MongoDB
 
 def get_connection():
-    # Connect to SQLite database file (creates it if it doesn't exist)
-    conn = sqlite3.connect('milk_calculator_app.db')
-    return conn
+    client = MongoClient(st.secrets["mongodb"]["uri"])
+    db = client["milk_calculator"]
+    return db
+       
 
 def get_days_in_month(month_num, year):
     """Return number of days in month."""
     return calendar.monthrange(year, month_num)[1]
 
-def load_data_db(conn, month_num, year):
-    """Load data for given month/year from milk_data table."""
+def load_data_db(db, month_num, year):
+    """Load data for given month/year from milk_data collection."""
     days = get_days_in_month(month_num, year)
     dates_list = [f"{day:02d}/{month_num:02d}/{year}" for day in range(1, days + 1)]
     
-    # Create table if it doesn't exist
-    cur = conn.cursor()
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS milk_data (
-        DATE TEXT PRIMARY KEY,
-        MORNING REAL,
-        EVENING REAL
-    )
-    """)
-    conn.commit()
+    # Query MongoDB for matching dates
+    collection = db["milk_data"]
+    query = {"date": {"$in": dates_list}}
+    rows = list(collection.find(query))
     
-    placeholders = ",".join(["?"] * len(dates_list))  # SQLite uses ? for placeholders
-    cur.execute(f"SELECT DATE, MORNING, EVENING FROM milk_data WHERE DATE IN ({placeholders})", dates_list)
-    rows = cur.fetchall()
-    cur.close()
-    
-    # Build dict from DB rows
-    data_dict = {row[0]: (row[1], row[2]) for row in rows}
+    # Build dict from DB documents
+    data_dict = {row["date"]: (row.get("morning", 0.0), row.get("evening", 0.0)) for row in rows}
     
     # Create DataFrame with all dates for the month
     df_data = {
@@ -46,36 +36,21 @@ def load_data_db(conn, month_num, year):
     }
     return pd.DataFrame(df_data)
 
-def save_data_db(conn, df):
-    """Save all rows from DataFrame to milk_data table."""
-    rows = []
+def save_data_db(db, df):
+    """Save all rows from DataFrame to milk_data collection."""
+    collection = db["milk_data"]
     for _, r in df.iterrows():
-        rows.append((r["தேதி"], float(r["காலை"]), float(r["மாலை"])))
-    
-    cur = conn.cursor()
-    # Create table if it doesn't exist
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS milk_data (
-        DATE TEXT PRIMARY KEY,
-        MORNING REAL,
-        EVENING REAL
-    )
-    """)
-    
-    # SQLite uses INSERT OR REPLACE for upsert
-    sql = """
-    INSERT OR REPLACE INTO milk_data (DATE, MORNING, EVENING)
-    VALUES (?, ?, ?)
-    """
-    
-    cur.executemany(sql, rows)
-    conn.commit()
-    cur.close()
+        # Upsert document
+        collection.update_one(
+            {"date": r["தேதி"]},
+            {"$set": {"morning": float(r["காலை"]), "evening": float(r["மாலை"])}},
+            upsert=True
+        )
 
 def app():
     st.title("MILK PAYMENT MONEY CALCULATOR 🐄🥛")
     
-    conn = get_connection()
+    db = get_connection()
 
     # Get current month and year
     now = datetime.now()
@@ -104,7 +79,7 @@ def app():
     st.write('\n')
 
     # Load data for selected month/year
-    df = load_data_db(conn, selected_month_num, selected_year)
+    df = load_data_db(db, selected_month_num, selected_year)
 
     # Data editor
     if 'editor_key' not in st.session_state:
@@ -122,16 +97,14 @@ def app():
         key=f"editor_{st.session_state.editor_key}"
     )
 
-    # Save on change
-    if edited_df is not None and not edited_df.equals(df):
+    # After the data_editor
+    if st.button("Save Changes"):
         try:
-            save_data_db(conn, edited_df)
-            st.session_state.editor_key += 1
+            save_data_db(db, edited_df)
             st.success("Data saved successfully!")
+            st.session_state.editor_key += 1  # Refresh editor
         except Exception as e:
             st.error(f"Error saving to DB: {e}")
-        finally:
-            conn.close()
 
     # Calculate totals
     total_morning = edited_df["காலை"].sum()
