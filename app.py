@@ -14,16 +14,15 @@ def get_connection():
 def get_days_in_month(month_num, year):
     """Return number of days in month."""
     return calendar.monthrange(year, month_num)[1]
-
 def load_data_db(db, month_num, year):
-    """Load data for given month/year from milk_data collection."""
-    days = get_days_in_month(month_num, year)
-    dates_list = [f"{day:02d}/{month_num:02d}/{year}" for day in range(1, days + 1)]
-    
-    # Query MongoDB for matching dates
-    collection = db["milk_data"]
-    query = {"date": {"$in": dates_list}}
-    rows = list(collection.find(query))
+    if db is None:
+        return pd.DataFrame()  # Return empty DF if no connection
+    # ... rest of your code ...
+    try:
+        rows = list(collection.find(query))
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        return pd.DataFrame()
     
     # Build dict from DB documents
     data_dict = {row["date"]: (row.get("morning", 0.0), row.get("evening", 0.0)) for row in rows}
