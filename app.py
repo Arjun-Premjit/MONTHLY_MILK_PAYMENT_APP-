@@ -7,7 +7,7 @@ from pymongo import MongoClient  # Added for MongoDB
 
 def get_connection():
     client = MongoClient(st.secrets["mongodb"]["uri"])
-    db = client["milk_calculator"]
+    db = client["cluster0.xfcb70r"]
     return db
        
 
@@ -135,5 +135,6 @@ def app():
 
 if __name__ == "__main__":
     app()
+
 
 
