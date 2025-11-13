@@ -77,21 +77,42 @@ def load_data_db(sheet, month_num, year):
         return default_df
 
 def save_data_db(sheet, df):
-    """Save all rows from DataFrame to Google Sheet."""
+    """Update existing rows if Date exists, otherwise append new rows."""
     if sheet is None:
         st.error("Cannot save: No connection to Google Sheets.")
         return
-    
+
     try:
-        # Clear existing data (optional: or update specific rows)
-        #sheet.clear()
-        # Add headers
-        sheet.append_row(["Date", "Morning", "Evening"])
-        # Add data
-        for _, r in df.iterrows():
-            sheet.append_row([r["தேதி"], float(r["காலை"]), float(r["மாலை"])])
+        # Get all existing records from the sheet
+        existing_records = sheet.get_all_records()
+        existing_dates = [record["Date"] for record in existing_records]
+
+        # Create a mapping of Date → row number (starting from 2, since row 1 has headers)
+        date_to_rownum = {record["Date"]: idx + 2 for idx, record in enumerate(existing_records)}
+
+        # Track how many rows were updated and appended
+        updated, appended = 0, 0
+
+        # Iterate through each record in the DataFrame
+        for _, row in df.iterrows():
+            date_str = row["தேதி"]
+            morning = float(row["காலை"])
+            evening = float(row["மாலை"])
+
+            if date_str in date_to_rownum:
+                # Existing record found → update in place
+                row_num = date_to_rownum[date_str]
+                sheet.update(f"B{row_num}:C{row_num}", [[morning, evening]])
+                updated += 1
+            else:
+                # New record → append as new row
+                sheet.append_row([date_str, morning, evening], value_input_option="USER_ENTERED")
+                appended += 1
+
+        #st.success(f"✅ {updated} rows updated, {appended} new rows added successfully!")
+
     except Exception as e:
-        st.error(f"Error saving to sheet: {e}")
+        st.error(f"❌ Error saving to Google Sheet: {e}")
 
 def app():
     st.title("MILK PAYMENT MONEY CALCULATOR 🐄🥛")
@@ -163,11 +184,12 @@ def app():
     st.write("---")
 
     st.write("# Total Amount of milk bought in the month of ", selected_month_name, " ", selected_year, " :", ft, " L")
-    st.write("## Calculation: ", ft, " X ", price_per_litre, " = ₹ ", ft) 
+    st.write("## Calculation: ", ft, " X ", price_per_litre, " = ₹ ", total_price) 
     st.write(f"# Total to Pay:   ₹ {total_price:.2f}")
 
 if __name__ == "__main__":
     app()
+
 
 
 
