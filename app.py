@@ -3,36 +3,40 @@ import streamlit as st
 import pandas as pd
 import calendar
 from datetime import datetime
-from pymongo import MongoClient  # Added for MongoDB
+import gspread
+from google.oauth2.service_account import Credentials
 
 def get_connection():
-    client = MongoClient(st.secrets["mongodb"]["uri"])
-    db = client["milk_calculator"]
-    return db
-       
+    # Authenticate with Google Sheets
+    creds_dict = st.secrets["google"]["credentials"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=[
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ])
+    client = gspread.authorize(creds)
+    sheet_id = st.secrets["google"]["sheet_id"]
+    sheet = client.open_by_key(sheet_id).sheet1  # Access the first sheet
+    return sheet
 
 def get_days_in_month(month_num, year):
     """Return number of days in month."""
     return calendar.monthrange(year, month_num)[1]
 
-def load_data_db(db, month_num, year):
-    """Load data for given month/year from milk_data collection."""
-    if db is None:
-        return pd.DataFrame()  # Return empty DF if no connection
-      
+def load_data_db(sheet, month_num, year):
+    """Load data for given month/year from Google Sheet."""
     days = get_days_in_month(month_num, year)
     dates_list = [f"{day:02d}/{month_num:02d}/{year}" for day in range(1, days + 1)]
-      
-    collection = db["milk_data"]  # Define collection here, outside try
-      
+    
     try:
-        query = {"date": {"$in": dates_list}}
-        rows = list(collection.find(query))
-          
-          # Build dict from DB documents
-        data_dict = {row["date"]: (row.get("morning", 0.0), row.get("evening", 0.0)) for row in rows}
-          
-          # Create DataFrame with all dates for the month
+        # Get all records from sheet
+        records = sheet.get_all_records()
+        # Filter by dates
+        data_dict = {}
+        for record in records:
+            if record["Date"] in dates_list:
+                data_dict[record["Date"]] = (record.get("Morning", 0.0), record.get("Evening", 0.0))
+        
+        # Create DataFrame
         df_data = {
             "தேதி": dates_list,
             "காலை": [data_dict.get(date, (0.0, 0.0))[0] for date in dates_list],
@@ -41,29 +45,29 @@ def load_data_db(db, month_num, year):
         return pd.DataFrame(df_data)
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        # Return empty DataFrame on error
         return pd.DataFrame({
             "தேதி": dates_list,
             "காலை": [0.0] * len(dates_list),
             "மாலை": [0.0] * len(dates_list)
         })
-  
 
-def save_data_db(db, df):
-    """Save all rows from DataFrame to milk_data collection."""
-    collection = db["milk_data"]
-    for _, r in df.iterrows():
-        # Upsert document
-        collection.update_one(
-            {"date": r["தேதி"]},
-            {"$set": {"morning": float(r["காலை"]), "evening": float(r["மாலை"])}},
-            upsert=True
-        )
+def save_data_db(sheet, df):
+    """Save all rows from DataFrame to Google Sheet."""
+    try:
+        # Clear existing data (optional: or update specific rows)
+        sheet.clear()
+        # Add headers
+        sheet.append_row(["Date", "Morning", "Evening"])
+        # Add data
+        for _, r in df.iterrows():
+            sheet.append_row([r["தேதி"], float(r["காலை"]), float(r["மாலை"])])
+    except Exception as e:
+        st.error(f"Error saving to sheet: {e}")
 
 def app():
     st.title("MILK PAYMENT MONEY CALCULATOR 🐄🥛")
     
-    db = get_connection()
+    sheet = get_connection()
 
     # Get current month and year
     now = datetime.now()
@@ -92,7 +96,7 @@ def app():
     st.write('\n')
 
     # Load data for selected month/year
-    df = load_data_db(db, selected_month_num, selected_year)
+    df = load_data_db(sheet, selected_month_num, selected_year)
 
     # Data editor
     if 'editor_key' not in st.session_state:
@@ -113,7 +117,7 @@ def app():
     # After the data_editor
     if st.button("Save Changes"):
         try:
-            save_data_db(db, edited_df)
+            save_data_db(sheet, edited_df)
             st.success("Data saved successfully!")
             st.session_state.editor_key += 1  # Refresh editor
         except Exception as e:
@@ -126,16 +130,12 @@ def app():
     
     price_per_litre = st.number_input("# Cost of 1 litre Milk(₹):", value=45, step=1)
     total_price = total_litres * price_per_litre
-    ft='{:.2f}'.format(total_litres)
+    ft = '{:.2f}'.format(total_litres)
     st.write("---")
 
-    st.write("# Total Amount of milk bought in the month of ",selected_month_name," ",selected_year," :",ft," L")
-    st.write("## Calculation: ",ft," X ",price_per_litre," = ₹ ",ft) 
+    st.write("# Total Amount of milk bought in the month of ", selected_month_name, " ", selected_year, " :", ft, " L")
+    st.write("## Calculation: ", ft, " X ", price_per_litre, " = ₹ ", ft) 
     st.write(f"# Total to Pay:   ₹ {total_price:.2f}")
 
 if __name__ == "__main__":
     app()
-
-
-
-
