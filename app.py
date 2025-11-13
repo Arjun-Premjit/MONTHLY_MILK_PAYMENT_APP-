@@ -8,24 +8,17 @@ import json
 from google.oauth2.service_account import Credentials
 
 def get_connection():
-    """Authenticate and connect to Google Sheets."""
-    try:
-        creds_json = st.secrets["google"]["credentials"]  # This is a string from secrets
-        creds_dict = json.loads(creds_json)  # Parse to dict
-        creds = Credentials.from_service_account_info(creds_dict, scopes=[
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ])
-        client = gspread.authorize(creds)
-        sheet_id = st.secrets["google"]["sheet_id"]
-        sheet = client.open_by_key(sheet_id).sheet1  # Access the first sheet
-        return sheet
-    except json.JSONDecodeError as e:
-        st.error(f"Invalid JSON in credentials: {e}. Check your secrets.toml for formatting errors.")
-        return None
-    except Exception as e:
-        st.error(f"Connection error: {e}. Verify your Google service account and sheet permissions.")
-        return None
+         creds_dict = {
+             "type": st.secrets["google"]["type"],
+             "project_id": st.secrets["google"]["project_id"],
+             "private_key": st.secrets["google"]["private_key"],
+             "client_email": st.secrets["google"]["client_email"],
+             # Add all required fields
+         }
+         creds = Credentials.from_service_account_info(creds_dict, scopes=[
+             "https://www.googleapis.com/auth/spreadsheets",
+             "https://www.googleapis.com/auth/drive"
+         ])
 
 def get_days_in_month(month_num, year):
     """Return number of days in month."""
@@ -159,3 +152,4 @@ def app():
 
 if __name__ == "__main__":
     app()
+
