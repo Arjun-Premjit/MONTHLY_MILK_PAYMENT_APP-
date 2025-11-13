@@ -84,7 +84,7 @@ def save_data_db(sheet, df):
     
     try:
         # Clear existing data (optional: or update specific rows)
-        sheet.clear()
+        #sheet.clear()
         # Add headers
         sheet.append_row(["Date", "Morning", "Evening"])
         # Add data
@@ -168,6 +168,7 @@ def app():
 
 if __name__ == "__main__":
     app()
+
 
 
 
