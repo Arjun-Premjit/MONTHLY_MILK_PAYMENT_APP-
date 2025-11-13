@@ -33,11 +33,19 @@ def get_days_in_month(month_num, year):
 
 def load_data_db(sheet, month_num, year):
     """Load data for given month/year from Google Sheet."""
-    if sheet is None:
-        return pd.DataFrame()  # Return empty if connection failed
-    
     days = get_days_in_month(month_num, year)
     dates_list = [f"{day:02d}/{month_num:02d}/{year}" for day in range(1, days + 1)]
+    
+    # Default DataFrame structure
+    default_df = pd.DataFrame({
+        "தேதி": dates_list,
+        "காலை": [0.0] * len(dates_list),
+        "மாலை": [0.0] * len(dates_list)
+    })
+    
+    if sheet is None:
+        st.warning("No connection to Google Sheets. Showing default empty data.")
+        return default_df
     
     try:
         # Get all records from sheet
@@ -56,12 +64,8 @@ def load_data_db(sheet, month_num, year):
         }
         return pd.DataFrame(df_data)
     except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return pd.DataFrame({
-            "தேதி": dates_list,
-            "காலை": [0.0] * len(dates_list),
-            "மாலை": [0.0] * len(dates_list)
-        })
+        st.error(f"Error loading data: {e}. Showing default empty data.")
+        return default_df
 
 def save_data_db(sheet, df):
     """Save all rows from DataFrame to Google Sheet."""
