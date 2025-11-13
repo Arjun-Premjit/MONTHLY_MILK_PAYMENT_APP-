@@ -5,19 +5,21 @@ import calendar
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
+import json  # Add this at the top with other imports
 
 def get_connection():
-    # Authenticate with Google Sheets
-    creds_dict = st.secrets["google"]["credentials"]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ])
-    client = gspread.authorize(creds)
-    sheet_id = st.secrets["google"]["sheet_id"]
-    sheet = client.open_by_key(sheet_id).sheet1  # Access the first sheet
-    return sheet
-
+       # Authenticate with Google Sheets
+       creds_json = st.secrets["google"]["credentials"]  # This is a string
+       creds_dict = json.loads(creds_json)  # Parse to dict
+       creds = Credentials.from_service_account_info(creds_dict, scopes=[
+           "https://www.googleapis.com/auth/spreadsheets",
+           "https://www.googleapis.com/auth/drive"
+       ])
+       client = gspread.authorize(creds)
+       sheet_id = st.secrets["google"]["sheet_id"]
+       sheet = client.open_by_key(sheet_id).sheet1  # Access the first sheet
+       return sheet
+    
 def get_days_in_month(month_num, year):
     """Return number of days in month."""
     return calendar.monthrange(year, month_num)[1]
@@ -139,3 +141,4 @@ def app():
 
 if __name__ == "__main__":
     app()
+
