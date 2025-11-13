@@ -5,27 +5,37 @@ import calendar
 from datetime import datetime
 import gspread
 import json
-from google.oauth2.service_account import Credentials # Add this at the top with other imports
+from google.oauth2.service_account import Credentials
 
 def get_connection():
-       # Authenticate with Google Sheets
-       creds_json = st.secrets["google"]["credentials"]  # This is a string
-       creds_dict = json.loads(creds_json)  # Parse to dict
-       creds = Credentials.from_service_account_info(creds_dict, scopes=[
-           "https://www.googleapis.com/auth/spreadsheets",
-           "https://www.googleapis.com/auth/drive"
-       ])
-       client = gspread.authorize(creds)
-       sheet_id = st.secrets["google"]["sheet_id"]
-       sheet = client.open_by_key(sheet_id).sheet1  # Access the first sheet
-       return sheet
-    
+    """Authenticate and connect to Google Sheets."""
+    try:
+        creds_json = st.secrets["google"]["credentials"]  # This is a string from secrets
+        creds_dict = json.loads(creds_json)  # Parse to dict
+        creds = Credentials.from_service_account_info(creds_dict, scopes=[
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ])
+        client = gspread.authorize(creds)
+        sheet_id = st.secrets["google"]["sheet_id"]
+        sheet = client.open_by_key(sheet_id).sheet1  # Access the first sheet
+        return sheet
+    except json.JSONDecodeError as e:
+        st.error(f"Invalid JSON in credentials: {e}. Check your secrets.toml for formatting errors.")
+        return None
+    except Exception as e:
+        st.error(f"Connection error: {e}. Verify your Google service account and sheet permissions.")
+        return None
+
 def get_days_in_month(month_num, year):
     """Return number of days in month."""
     return calendar.monthrange(year, month_num)[1]
 
 def load_data_db(sheet, month_num, year):
     """Load data for given month/year from Google Sheet."""
+    if sheet is None:
+        return pd.DataFrame()  # Return empty if connection failed
+    
     days = get_days_in_month(month_num, year)
     dates_list = [f"{day:02d}/{month_num:02d}/{year}" for day in range(1, days + 1)]
     
@@ -55,6 +65,10 @@ def load_data_db(sheet, month_num, year):
 
 def save_data_db(sheet, df):
     """Save all rows from DataFrame to Google Sheet."""
+    if sheet is None:
+        st.error("Cannot save: No connection to Google Sheets.")
+        return
+    
     try:
         # Clear existing data (optional: or update specific rows)
         sheet.clear()
@@ -141,5 +155,3 @@ def app():
 
 if __name__ == "__main__":
     app()
-
-
