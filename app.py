@@ -4,8 +4,8 @@ import pandas as pd
 import calendar
 from datetime import datetime
 import gspread
-from google.oauth2.service_account import Credentials
-import json  # Add this at the top with other imports
+import json
+from google.oauth2.service_account import Credentials # Add this at the top with other imports
 
 def get_connection():
        # Authenticate with Google Sheets
@@ -141,4 +141,5 @@ def app():
 
 if __name__ == "__main__":
     app()
+
 
