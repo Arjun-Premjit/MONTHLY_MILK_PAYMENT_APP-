@@ -178,7 +178,7 @@ def app():
     total_evening = edited_df["மாலை"].sum()
     total_litres = (total_morning + total_evening) * 0.001
     
-    price_per_litre = st.number_input("# Cost of 1 litre Milk(₹):", value=45, step=1)
+    price_per_litre = st.number_input("# Cost of 1 litre Milk(₹):", value=50, step=1)
     total_price = total_litres * price_per_litre
     ft = '{:.2f}'.format(total_litres)
     st.write("---")
